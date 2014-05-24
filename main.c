@@ -28,6 +28,7 @@ void sigHandler(int s);
 
 // Domain socket path & descriptor
 #define SOCKET_PATH "./wipacket.sock"
+char *socketPath;
 int domainSocket;
 
 // Ethernet protocol ID
@@ -37,8 +38,10 @@ int domainSocket;
 #define PAYLOAD_LENGTH 4096
 
 // ESSID and frequency for network
-#define ESSID "wipkt"
+#define ESSID "WiPacket"
 #define FREQUENCY 2412
+static char *essid;
+static int frequency;
 
 // The ethernet broadcast address
 const unsigned char broadcast_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
@@ -55,49 +58,101 @@ static unsigned char hw_addr[ETHER_ADDR_LEN];
 // A sockaddr_ll struct for creating frame headers
 static struct sockaddr_ll broadcast = {0};
 
+// Verbose and quiet
+bool verbose = false;
+bool quiet = false;
+
 // Whether to keep running
 bool run = true;
 
 int main(int argc, char **argv) {
     // Get interface name from command line argument
-    if (argc > 1) {
-        if_name = argv[1];
-        if_name_len = strlen(if_name);
-    } else {
-        printf("No interface specified\nUsage: wipacket [interface]\n");
-        exit(1);
+    extern char *optarg;
+    extern int optind;
+
+    int eflag = 0;
+    int fflag = 0;
+    int sflag = 0;
+    int o, err = 0;
+    while ((o = getopt(argc, argv, "e:f:s:v::q::")) != -1) {
+        switch (o) {
+            case 'e':
+                eflag = 1;
+                essid = optarg;
+                break;
+            case 'f':
+                fflag = 1;
+                frequency = atoi(optarg);
+                break;
+            case 's':
+                sflag = 1;
+                socketPath = optarg;
+                break;
+            case 'v':
+                verbose = true;
+                quiet = false;
+                break;
+            case 'q':
+                quiet = true;
+                verbose = false;
+                break;
+
+            case '?':
+                err = 1;
+                break;
+        }
     }
 
+    if ((optind+1) > argc || err) {
+        if ((optind+1) > argc) {
+            printf("No interface specified\n");
+        }
+        if (err) {
+            //printf("Invalid option specified\n");
+        }
+        printf("Usage: wipacket [-e essid] [-f frequency] [-s socket_path] [-v] [-q] interface\n");
+        exit(1);
+    } else {
+        if_name = argv[optind];
+        if_name_len = strlen(if_name);
+    }
+
+    if (!eflag) essid = ESSID;
+    if (!fflag) frequency = FREQUENCY;
+    if (!sflag) socketPath = SOCKET_PATH;
+   
     init();
     configureInterface();
     registerSockets();
+
+    if (!quiet) printf("Interface is ready!\n");
 
     char incomingBuffer[PAYLOAD_LENGTH];
     while (run) {
         int connection;
         struct sockaddr_un remote;
         int structLen = sizeof(remote);
-        printf("Waiting for connection...\n");
+        if (verbose) printf("Waiting for connection...\n");
         connection = accept(domainSocket, (struct sockaddr*)&remote, &structLen);
         if (connection == -1) {
             if (run) printf("Error while accepting client connection\n");
             cleanup();
             exit(1);
         } else {
-            printf("Accepted client connection\n");
+            if (verbose) printf("Accepted client connection\n");
             int readLength = 0;
             bool connectionOk = true;
             while (connectionOk) {
                 readLength = recv(connection, incomingBuffer, PAYLOAD_LENGTH, 0);
                 if (readLength < 0) {
-                    printf("Error while reading from client\n");
+                    if (!quiet) printf("Error while reading from client\n");
                     connectionOk = false;
                 } else {
                     if (readLength > 0) {
                         transmit(incomingBuffer, readLength);
                     }
                     if (readLength == 0) {
-                        printf("Client disconnect\n");
+                        if (verbose) printf("Client disconnect\n");
                         connectionOk = false;
                     }
                 }
@@ -122,7 +177,7 @@ void init() {
     netSocket = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
 
     if (netSocket == -1) {
-        printf("Error creating network socket\n");
+        printf("Error creating network socket. Running as unprivileged user?\n");
         exit(1);
     }
 
@@ -142,8 +197,8 @@ void init() {
     struct ifreq *requestPointer = &interfaceRequest;
     interfaceInfo(netSocket, requestPointer);
     
-    printf("Selecting interface: %s (interface index %d)\n", if_name, if_index);
-    printf("Current physical address : %.2x:%.2x:%.2x:%.2x:%.2x:%.2x\n" , hw_addr[0], hw_addr[1], hw_addr[2], hw_addr[3], hw_addr[4], hw_addr[5]);
+    //printf("Configuring %s (interface index %d)\n", if_name, if_index);
+    if (!quiet) printf("Configuring %s (%.2x:%.2x:%.2x:%.2x:%.2x:%.2x if_index=%d)\n" , if_name, hw_addr[0], hw_addr[1], hw_addr[2], hw_addr[3], hw_addr[4], hw_addr[5], if_index);
 
     prepeareBroadcastHeader();
 }
@@ -162,7 +217,7 @@ void registerSockets() {
 
 
     local.sun_family = AF_UNIX;
-    strcpy(local.sun_path, SOCKET_PATH);
+    strcpy(local.sun_path, socketPath);
     unlink(local.sun_path);
     len = strlen(local.sun_path) + sizeof(local.sun_family);
     
@@ -226,22 +281,21 @@ void prepeareBroadcastHeader() {
 
 void configureInterface() {
     int status;
-    printf("Configuring interface %s...\n", if_name);
     if_down(if_name);
     if_enable_ibss(if_name);
     if_up(if_name);
-    if_join_ibss(if_name, ESSID, FREQUENCY);
+    if_join_ibss(if_name, essid, frequency);
 }
 
 void cleanup() {
     close(netSocket);
     close(domainSocket);
-    unlink(SOCKET_PATH);
+    unlink(socketPath);
 }
 
 void sigHandler(int s) {
     if (s==2) {
-        printf("\nCaught SIGINT, exiting...\n");
+        if (!quiet) printf("\nCaught SIGINT, exiting...\n");
         run = false;
     }
 }
