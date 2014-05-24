@@ -9,6 +9,8 @@
 
 #include <net/ethernet.h>
 #include <linux/if_packet.h>
+
+#include "if_helper.h"
 //#include <linux/if_ether.h>
 //#include <linux/if_arp.h>
 
@@ -22,6 +24,10 @@ void cleanup();
 
 // Ethernet protocol ID
 #define PROTOCOL_IDENTIFIER 0x9f77
+
+// ESSID and frequency for network
+#define ESSID "wipacket"
+#define FREQUENCY 2412
 
 // The ethernet broadcast address
 const unsigned char broadcast_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
@@ -120,7 +126,12 @@ void prepeareBroadcastHeader() {
 }
 
 void configureInterface() {
+    int status;
     printf("Configuring interface %s...\n", if_name);
+    if_down(if_name);
+    if_enable_ibss(if_name);
+    if_up(if_name);
+    if_join_ibss(if_name, ESSID, FREQUENCY);
 }
 
 void cleanup() {
