@@ -1,5 +1,5 @@
 test:
-	gcc main.c if_helper.c -o bin/wipacket -liw
+	gcc main.c if_helper.c -o bin/wipacket
 
 clean:
 	rm wipacket
