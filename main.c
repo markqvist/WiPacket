@@ -6,6 +6,8 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/time.h>
+#include <sys/types.h>
 #include <signal.h>
 #include <unistd.h>
 
@@ -25,6 +27,8 @@ void prepeareBroadcastHeader();
 bool transmit(char *payload, size_t len);
 void cleanup();
 void sigHandler(int s);
+bool protocolIdMatch(char *buffer);
+bool notMine(char *buffer);
 
 // Domain socket path & descriptor
 #define SOCKET_PATH "./wipacket.sock"
@@ -127,7 +131,14 @@ int main(int argc, char **argv) {
 
     if (!quiet) printf("Interface is ready!\n");
 
+    // Socket select setup
+    struct timeval timeout;
+    int timeout_msec = 5;
+    
+    //////////////////////
+
     char incomingBuffer[PAYLOAD_LENGTH];
+    char packetBuffer[PAYLOAD_LENGTH];// = malloc(PAYLOAD_LENGTH);
     while (run) {
         int connection;
         struct sockaddr_un remote;
@@ -140,22 +151,65 @@ int main(int argc, char **argv) {
             exit(1);
         } else {
             if (verbose) printf("Accepted client connection\n");
-            int readLength = 0;
+            int dReadLength = 0;
+            int nReadLength = 0;
             bool connectionOk = true;
+
             while (connectionOk) {
-                readLength = recv(connection, incomingBuffer, PAYLOAD_LENGTH, 0);
-                if (readLength < 0) {
-                    if (!quiet) printf("Error while reading from client\n");
-                    connectionOk = false;
-                } else {
-                    if (readLength > 0) {
-                        transmit(incomingBuffer, readLength);
-                    }
-                    if (readLength == 0) {
-                        if (verbose) printf("Client disconnect\n");
-                        connectionOk = false;
+                //////////////////////////////////////////////////
+                //// Read data from net socket ///////////////////
+                timeout.tv_sec = 0;
+                timeout.tv_usec = timeout_msec*1000;
+                fd_set netSet;
+                fd_set domainSet;
+
+                FD_ZERO(&netSet);
+                FD_SET(netSocket, &netSet);
+                FD_ZERO(&domainSet);
+                FD_SET(connection, &domainSet);
+
+                int netSocketReady = select(netSocket+1, &netSet, NULL, NULL, &timeout);
+                if (netSocketReady < 0) {
+                    if (verbose) printf("Could not query net socket status\n");
+                }
+                if (netSocketReady == 1) {
+                    struct sockaddr saddr;
+                    int saddr_size = sizeof(saddr);
+                    nReadLength = recvfrom(netSocket, packetBuffer, PAYLOAD_LENGTH, 0, &saddr, (socklen_t*)&saddr_size);
+                    if (nReadLength > 0) {
+                        if (protocolIdMatch(packetBuffer) && notMine(packetBuffer)) {
+                            if (send(connection, packetBuffer+14, nReadLength-14, 0) < 0) {
+                                if (verbose) printf("Error writing packet to domain socket\n");
+                                connectionOk = false;
+                            }
+                        }
                     }
                 }
+
+                //////////////////////////////////////////////////
+                //// Read data from domain socket ////////////////
+                timeout.tv_sec = 0;
+                timeout.tv_usec = timeout_msec*1000;
+                int domainSocketReady = select(connection+1, &domainSet, NULL, NULL, &timeout);
+                if (domainSocketReady < 0) {
+                    if (verbose) printf("Could not query domain socket status\n");
+                }
+                if (domainSocketReady == 1) {
+                    dReadLength = recv(connection, incomingBuffer, PAYLOAD_LENGTH, 0);
+                    if (dReadLength < 0) {
+                        if (!quiet) printf("Error while reading from client\n");
+                        connectionOk = false;
+                    } else {
+                        if (dReadLength > 0) {
+                            transmit(incomingBuffer, dReadLength);
+                        }
+                        if (dReadLength == 0) {
+                            if (verbose) printf("Client disconnect\n");
+                            connectionOk = false;
+                        }
+                    }
+                }
+
             }
         }
 
@@ -163,6 +217,26 @@ int main(int argc, char **argv) {
 
     cleanup();
     exit(0);
+}
+
+bool protocolIdMatch(char *buffer) {
+    if ((PROTOCOL_IDENTIFIER >> 8) == (unsigned char)buffer[12] &&
+        (PROTOCOL_IDENTIFIER & 0xff) == (unsigned char)buffer[13]) {
+        return true;
+    } else {
+        return false;
+    }
+
+}
+
+bool notMine(char *buffer) {
+    if ((unsigned char)buffer[6] != hw_addr[0] ||
+        (unsigned char)buffer[7] != hw_addr[1] ||
+        (unsigned char)buffer[8] != hw_addr[2] ||
+        (unsigned char)buffer[9] != hw_addr[3] ||
+        (unsigned char)buffer[10] != hw_addr[4] ||
+        (unsigned char)buffer[11] != hw_addr[5]) return true;
+    return false;
 }
 
 void init() {
@@ -174,7 +248,7 @@ void init() {
     sigaction(SIGINT, &handler, NULL);
 
     // Open raw AF_PACKET socket
-    netSocket = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+    netSocket = socket(AF_PACKET, SOCK_RAW, htons(PROTOCOL_IDENTIFIER));
 
     if (netSocket == -1) {
         printf("Error creating network socket. Running as unprivileged user?\n");
