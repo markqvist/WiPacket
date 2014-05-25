@@ -43,3 +43,13 @@ int if_join_ibss(char *name, char *essid, int frequency) {
     }
     return ret;
 }
+
+int if_promisc(char *name) {
+    char buf[128];
+    snprintf(buf, sizeof(buf), "ifconfig %s promisc", name);
+    int ret = system(buf);
+    if (ret != 0) {
+        printf("Could not put interface %s into promiscous mode\n", name);
+    }
+    return ret;
+}

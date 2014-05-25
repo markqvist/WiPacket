@@ -15,6 +15,7 @@
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
 #include <linux/if_arp.h>
+#include <netinet/in.h>
 
 #include "if_helper.h"
 
@@ -142,7 +143,7 @@ int main(int argc, char **argv) {
     while (run) {
         int connection;
         struct sockaddr_un remote;
-        int structLen = sizeof(remote);
+        socklen_t structLen = sizeof(remote);
         if (verbose) printf("Waiting for connection...\n");
         connection = accept(domainSocket, (struct sockaddr*)&remote, &structLen);
         if (connection == -1) {
@@ -354,11 +355,11 @@ void prepeareBroadcastHeader() {
 }
 
 void configureInterface() {
-    int status;
     if_down(if_name);
     if_enable_ibss(if_name);
     if_up(if_name);
     if_join_ibss(if_name, essid, frequency);
+    if_promisc(if_name);
 }
 
 void cleanup() {

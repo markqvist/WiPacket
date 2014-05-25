@@ -1,5 +1,6 @@
 test:
-	gcc main.c if_helper.c -o bin/wipacket
+	mkdir -p bin
+	gcc main.c -Wall if_helper.c -o bin/wipacket
 
 clean:
-	rm bin/wipacket
+	rm -r bin
