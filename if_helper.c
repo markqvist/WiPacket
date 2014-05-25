@@ -24,6 +24,16 @@ int if_down(char *name) {
     return ret;
 }
 
+int if_mtu(char *name, int mtu) {
+    char buf[128];
+    snprintf(buf, sizeof(buf), "ifconfig %s mtu %d", name, mtu);
+    int ret = system(buf);
+    if (ret != 0) {
+        printf("Could set MTU for interface %s\n", name);
+    }
+    return ret;
+}
+
 int if_enable_ibss(char *name) {
     char buf[128];
     snprintf(buf, sizeof(buf), "iw %s set type ibss", name);

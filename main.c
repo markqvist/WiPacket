@@ -40,7 +40,7 @@ int domainSocket;
 #define PROTOCOL_IDENTIFIER 0x9f77
 
 // Max payload length
-#define PAYLOAD_LENGTH 4096
+#define PAYLOAD_LENGTH 1500
 
 // ESSID and frequency for network
 #define ESSID "WiPacket"
@@ -358,6 +358,7 @@ void configureInterface() {
     if_down(if_name);
     if_enable_ibss(if_name);
     if_up(if_name);
+    if_mtu(if_name, PAYLOAD_LENGTH);
     if_join_ibss(if_name, essid, frequency);
     if_promisc(if_name);
 }
