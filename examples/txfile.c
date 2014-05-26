@@ -1,0 +1,143 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/time.h>
+
+char *file_name;
+char *socket_path;
+bool verbose = false;
+
+int wiSocket;
+FILE *fd;
+
+#define TIMEOUT_MSEC 1500
+#define HEADER_SIZE 4 // Size of unsigned long
+#define FRAGMENT_SIZE 1482
+#define PACKET_SIZE HEADER_SIZE+FRAGMENT_SIZE
+char buffer[PACKET_SIZE];
+unsigned long fragment;
+unsigned long ack;
+
+int main(int argc, char **argv) {
+    extern char *optarg;
+    extern int optind;
+
+    int o, err = 0;
+    while ((o = getopt(argc, argv, "v::")) != -1) {
+        switch (o) {
+            case 'v':
+                verbose = true;
+                break;
+
+            case '?':
+                err = 1;
+                break;
+        }
+    }
+
+    if ((optind+1) > argc || err) {
+        if ((optind+2) > argc) {
+            printf("No file specified\n");
+        }
+        if ((optind+1) > argc) {
+            printf("No WiPacket socket specified\n");
+        }
+        if (err) {
+            //printf("Invalid option specified\n");
+        }
+        printf("Sends a file using WiPacket\n");
+        printf("Usage: txfile [-v] socket file\n");
+        exit(1);
+    } else {
+        socket_path = argv[argc-2];
+        file_name = argv[argc-1];
+    }
+
+    printf("File %s\n",file_name);
+    printf("Socket %s\n",socket_path);
+
+    fd = fopen(file_name, "r");
+    if (fd == NULL) {
+        printf("Could not input file\n");
+        exit(1);
+    }
+
+
+    struct sockaddr_un remote;
+    wiSocket = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (wiSocket == -1) {
+        printf("Could not create socket\n");
+        exit(1);
+    }
+
+    remote.sun_family = AF_UNIX;
+    strcpy(remote.sun_path, socket_path);
+    printf("Opening socket at %s\n", remote.sun_path);
+    int len = strlen(remote.sun_path) + sizeof(remote.sun_family);
+    if (connect(wiSocket, (struct sockaddr*)&remote, len) == -1) {
+        perror("connect");
+        printf("Could not connect to WiPacket socket\n");
+        exit(1);
+    }
+
+    printf("Connected to WiPacket\n");
+
+    fd_set wiSocketSet;
+    struct timeval timeout;
+
+    fragment = 0;
+    ack = 0;
+    int nRead;
+    while ((nRead = fread(buffer+HEADER_SIZE, 1, FRAGMENT_SIZE, fd))) {
+        fragment++;
+        memcpy(buffer, &fragment, HEADER_SIZE);
+
+        bool gotAck = false;
+        while (!gotAck) {
+
+            if (send(wiSocket, buffer, nRead, 0) < 0) {
+                printf("Error writing to WiPacket socket\n");
+                exit(1);
+            }
+            printf("Sent fragment %lu\n", fragment);
+
+            FD_ZERO(&wiSocketSet);
+            FD_SET(wiSocket, &wiSocketSet);
+            timeout.tv_sec = 0;
+            timeout.tv_usec = TIMEOUT_MSEC*1000;
+            
+            int socketReady = select(wiSocket+1, &wiSocketSet, NULL, NULL, &timeout);
+            if (socketReady < 0) {
+                printf("Error reading from WiPacket while waiting for ACK\n");
+                exit(1);
+            }
+
+            if (socketReady == 1) {
+                nRead = recv(wiSocket, buffer, PACKET_SIZE, 0);
+                if (nRead != 0) {
+                    printf("Read %d bytes\n", nRead);
+                    memcpy(&ack, buffer, HEADER_SIZE);
+
+                    if (ack == fragment) {
+                        gotAck = true;
+                    } else {
+                        printf("Got a response, but not correct ACK\n");
+                    }
+                }
+            }
+
+        }
+        printf("Got ACK for fragment %lu, moving on...\n", fragment);
+    }
+
+    printf("File transmitted\n");
+
+    fclose(fd);
+    return 0;
+}
