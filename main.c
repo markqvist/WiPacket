@@ -202,7 +202,7 @@ int main(int argc, char **argv) {
                     struct sockaddr saddr;
                     int saddr_size = sizeof(saddr);
 
-                    nReadLength = recvfrom(netSocket, packetBuffer, PAYLOAD_LENGTH, 0, &saddr, (socklen_t*)&saddr_size);
+                    nReadLength = recvfrom(netSocket, packetBuffer, PAYLOAD_LENGTH+14, 0, &saddr, (socklen_t*)&saddr_size);
                     if (nReadLength > 0) {
                         printf("Putting into domain socket...\n");
                         if (protocolIdMatch(packetBuffer) && notMine(packetBuffer)) {
