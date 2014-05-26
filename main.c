@@ -40,7 +40,7 @@ int domainSocket;
 #define PROTOCOL_IDENTIFIER 0x9f77
 
 // Max payload length
-#define PAYLOAD_LENGTH 1500
+#define PAYLOAD_LENGTH 1486
 
 // ESSID and frequency for network
 #define ESSID "WiPacket"
@@ -157,10 +157,6 @@ int main(int argc, char **argv) {
             bool connectionOk = true;
 
             while (connectionOk) {
-                //////////////////////////////////////////////////
-                //// Read data from net socket ///////////////////
-                timeout.tv_sec = 0;
-                timeout.tv_usec = timeout_msec*1000;
                 fd_set netSet;
                 fd_set domainSet;
 
@@ -168,25 +164,6 @@ int main(int argc, char **argv) {
                 FD_SET(netSocket, &netSet);
                 FD_ZERO(&domainSet);
                 FD_SET(connection, &domainSet);
-
-                int netSocketReady = select(netSocket+1, &netSet, NULL, NULL, &timeout);
-                if (netSocketReady < 0) {
-                    if (verbose) printf("Could not query net socket status\n");
-                }
-                if (netSocketReady == 1) {
-                    struct sockaddr saddr;
-                    int saddr_size = sizeof(saddr);
-                    nReadLength = recvfrom(netSocket, packetBuffer, PAYLOAD_LENGTH, 0, &saddr, (socklen_t*)&saddr_size);
-                    if (nReadLength > 0) {
-                        if (protocolIdMatch(packetBuffer) && notMine(packetBuffer)) {
-                            if (send(connection, packetBuffer+14, nReadLength-14, 0) < 0) {
-                                if (verbose) printf("Error writing packet to domain socket\n");
-                                connectionOk = false;
-                            }
-                        }
-                    }
-                }
-
                 //////////////////////////////////////////////////
                 //// Read data from domain socket ////////////////
                 timeout.tv_sec = 0;
@@ -200,6 +177,7 @@ int main(int argc, char **argv) {
                     if (dReadLength < 0) {
                         if (!quiet) printf("Error while reading from client\n");
                         connectionOk = false;
+                        close(connection);
                     } else {
                         if (dReadLength > 0) {
                             transmit(incomingBuffer, dReadLength);
@@ -207,6 +185,32 @@ int main(int argc, char **argv) {
                         if (dReadLength == 0) {
                             if (verbose) printf("Client disconnect\n");
                             connectionOk = false;
+                            close(connection);
+                        }
+                    }
+                }
+
+                //////////////////////////////////////////////////
+                //// Read data from net socket ///////////////////
+                timeout.tv_sec = 0;
+                timeout.tv_usec = timeout_msec*1000;
+                int netSocketReady = select(netSocket+1, &netSet, NULL, NULL, &timeout);
+                if (netSocketReady < 0) {
+                    if (verbose) printf("Could not query net socket status\n");
+                }
+                if (netSocketReady == 1) {
+                    struct sockaddr saddr;
+                    int saddr_size = sizeof(saddr);
+
+                    nReadLength = recvfrom(netSocket, packetBuffer, PAYLOAD_LENGTH, 0, &saddr, (socklen_t*)&saddr_size);
+                    if (nReadLength > 0) {
+                        printf("Putting into domain socket...\n");
+                        if (protocolIdMatch(packetBuffer) && notMine(packetBuffer)) {
+                            if (send(connection, packetBuffer+14, nReadLength-14, 0) < 0) {
+                                if (verbose) printf("Error writing packet to domain socket\n");
+                                connectionOk = false;
+                                close(connection);
+                            }
                         }
                     }
                 }
@@ -358,7 +362,7 @@ void configureInterface() {
     if_down(if_name);
     if_enable_ibss(if_name);
     if_up(if_name);
-    if_mtu(if_name, PAYLOAD_LENGTH);
+    if_mtu(if_name, PAYLOAD_LENGTH+14);
     if_join_ibss(if_name, essid, frequency);
     if_promisc(if_name);
 }
