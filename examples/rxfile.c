@@ -16,7 +16,7 @@ bool verbose = false;
 int wiSocket;
 FILE *fd;
 
-#define TIMEOUT_MSEC 25
+#define TIMEOUT_MSEC 1000
 #define HEADER_SIZE 4 // Size of unsigned long
 #define FRAGMENT_SIZE 1482
 #define PACKET_SIZE HEADER_SIZE+FRAGMENT_SIZE
@@ -117,7 +117,9 @@ int main(int argc, char **argv) {
                         printf("Error while writing received data to file\n");
                         exit(1);
                     }
+                }
 
+                if (fragment == ack) {
                     memcpy(aBuffer, &ack, HEADER_SIZE);
                     if (send(wiSocket, aBuffer, HEADER_SIZE, 0) < 0) {
                         printf("Error writing to WiPacket socket while sending ACK\n");
