@@ -16,6 +16,7 @@ bool verbose = false;
 int wiSocket;
 FILE *fd;
 
+#define RETRIES 10
 #define TIMEOUT_MSEC 25
 #define HEADER_SIZE 4
 #define FRAGMENT_SIZE 1482
@@ -90,9 +91,11 @@ int main(int argc, char **argv) {
 
     fragment = 0;
     ack = 0;
+    int retries = 0;
     int sRead;
     bool done = false;
-    while (!done) {
+    while (!done && retries < RETRIES) {
+        retries++;
 
         FD_ZERO(&wiSocketSet);
         FD_SET(wiSocket, &wiSocketSet);
@@ -113,6 +116,7 @@ int main(int argc, char **argv) {
                 if (fragment == ack+1) {
                     if (verbose) printf("Got fragment %lu (%d bytes)\n", fragment, sRead-HEADER_SIZE);
                     ack++;
+                    retries = 0;
                     if ((fwrite(sBuffer+HEADER_SIZE, 1, sRead - HEADER_SIZE, fd)) != sRead - HEADER_SIZE) {
                         printf("Error while writing received data to file\n");
                         exit(1);

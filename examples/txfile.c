@@ -16,6 +16,7 @@ bool verbose = false;
 int wiSocket;
 FILE *fd;
 
+#define RETRIES 10
 #define TIMEOUT_MSEC 25
 #define HEADER_SIZE 4
 #define FRAGMENT_SIZE 1482
@@ -92,6 +93,7 @@ int main(int argc, char **argv) {
     fragment = 0;
     ack = 0;
     bool gotAck;
+    int retries = 0;
     int fRead;
     int sRead;
     while ((fRead = fread(fBuffer+HEADER_SIZE, 1, FRAGMENT_SIZE, fd))) {
@@ -130,18 +132,22 @@ int main(int argc, char **argv) {
                     }
                 }
             }
-
+            retries++;
+            if (retries > RETRIES) {
+                printf("Transfer failed due to timeout\n");
+                exit(1);
+            }
         }
         if (verbose) printf("Got ACK for fragment %d, moving on...\n", fragment);
     }
 
     // File transmitted, send EOF packet
+    retries = 0;
     fragment = 0;
     memcpy(fBuffer, &fragment, HEADER_SIZE);
     gotAck = false;
 
     while (!gotAck) {
-
         if (send(wiSocket, fBuffer, HEADER_SIZE, 0) < 0) {
             printf("Error writing to WiPacket socket\n");
             exit(1);
@@ -171,7 +177,11 @@ int main(int argc, char **argv) {
                 }
             }
         }
-
+        retries++;
+        if (retries > RETRIES) {
+            printf("Transfer failed due to timeout\n");
+            exit(1);
+        }
     }
     ///////////////////////////////////////
 
