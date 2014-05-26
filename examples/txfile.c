@@ -94,13 +94,14 @@ int main(int argc, char **argv) {
 
     fragment = 0;
     ack = 0;
+    bool gotAck;
     int fRead;
     int sRead;
     while ((fRead = fread(fBuffer+HEADER_SIZE, 1, FRAGMENT_SIZE, fd))) {
         fragment++;
         memcpy(fBuffer, &fragment, HEADER_SIZE);
 
-        bool gotAck = false;
+        gotAck = false;
         while (!gotAck) {
 
             if (send(wiSocket, fBuffer, fRead, 0) < 0) {
@@ -137,6 +138,47 @@ int main(int argc, char **argv) {
         }
         printf("Got ACK for fragment %lu, moving on...\n", fragment);
     }
+
+    // File transmitted, send EOF packet
+    fragment = 0;
+    memcpy(fBuffer, &fragment, HEADER_SIZE);
+    gotAck = false;
+
+    while (!gotAck) {
+
+        if (send(wiSocket, fBuffer, HEADER_SIZE, 0) < 0) {
+            printf("Error writing to WiPacket socket\n");
+            exit(1);
+        }
+        printf("Sent EOF packet\n");
+
+        FD_ZERO(&wiSocketSet);
+        FD_SET(wiSocket, &wiSocketSet);
+        timeout.tv_sec = 0;
+        timeout.tv_usec = TIMEOUT_MSEC*1000;
+        
+        int socketReady = select(wiSocket+1, &wiSocketSet, NULL, NULL, &timeout);
+        if (socketReady < 0) {
+            printf("Error reading from WiPacket while waiting for ACK\n");
+            exit(1);
+        }
+
+        if (socketReady == 1) {
+            sRead = recv(wiSocket, sBuffer, PACKET_SIZE, 0);
+            if (sRead != 0) {
+                printf("Read %d bytes\n", sRead);
+                memcpy(&ack, sBuffer, HEADER_SIZE);
+
+                if (ack == fragment) {
+                    gotAck = true;
+                } else {
+                    printf("Got a response, but not correct ACK\n");
+                }
+            }
+        }
+
+    }
+    ///////////////////////////////////////
 
     printf("File transmitted\n");
 

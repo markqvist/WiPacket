@@ -56,16 +56,16 @@ int main(int argc, char **argv) {
         printf("Usage: rxfile [-v] socket file\n");
         exit(1);
     } else {
-        socket_path = argv[optind-1];
-        file_name = argv[optind];
+        socket_path = argv[argc-2];
+        file_name = argv[argc-1];
     }
 
     printf("File %s\n",file_name);
     printf("Socket %s\n",socket_path);
 
-    fd = fopen(file_name, "w");
+    fd = fopen(file_name, "w+");
     if (fd == NULL) {
-        printf("Could not output file\n");
+        printf("Could not open output file\n");
         exit(1);
     }
 
@@ -127,6 +127,11 @@ int main(int argc, char **argv) {
                         printf("Error writing to WiPacket socket while sending ACK\n");
                         exit(1);
                     }
+                }
+
+                if (ack > 0 && fragment == 0) {
+                    fclose(fd);
+                    printf("File received\n");
                 }
             }
         }
