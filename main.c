@@ -204,7 +204,6 @@ int main(int argc, char **argv) {
 
                     nReadLength = recvfrom(netSocket, packetBuffer, PAYLOAD_LENGTH+14, 0, &saddr, (socklen_t*)&saddr_size);
                     if (nReadLength > 0) {
-                        printf("Putting into domain socket...\n");
                         if (protocolIdMatch(packetBuffer) && notMine(packetBuffer)) {
                             if (send(connection, packetBuffer+14, nReadLength-14, 0) < 0) {
                                 if (verbose) printf("Error writing packet to domain socket\n");

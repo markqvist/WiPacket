@@ -60,9 +60,6 @@ int main(int argc, char **argv) {
         file_name = argv[argc-1];
     }
 
-    printf("File %s\n",file_name);
-    printf("Socket %s\n",socket_path);
-
     fd = fopen(file_name, "w+");
     if (fd == NULL) {
         printf("Could not open output file\n");
@@ -86,7 +83,8 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    printf("Connected to WiPacket\n");
+    if (verbose) printf("Connected to WiPacket\n");
+    printf("Waiting for file...\n");
 
     fd_set wiSocketSet;
     struct timeval timeout;
@@ -111,11 +109,10 @@ int main(int argc, char **argv) {
         if (socketReady == 1) {
             sRead = recv(wiSocket, sBuffer, PACKET_SIZE, 0);
             if (sRead != 0) {
-                printf("Read %d bytes\n", sRead);
                 memcpy(&fragment, sBuffer, HEADER_SIZE);
 
                 if (fragment == ack+1) {
-                    printf("Got fragment %lu\n", fragment);
+                    if (verbose) printf("Got fragment %lu (%d bytes)\n", fragment, sRead);
                     ack++;
                     if ((fwrite(sBuffer+HEADER_SIZE, 1, sRead - HEADER_SIZE, fd)) != sRead - HEADER_SIZE) {
                         printf("Error while writing received data to file\n");
@@ -130,14 +127,20 @@ int main(int argc, char **argv) {
                 }
 
                 if (ack > 0 && fragment == 0) {
-                    fclose(fd);
                     printf("File received\n");
+                    ack = 0;
+                    memcpy(aBuffer, &ack, HEADER_SIZE);
+                    if (send(wiSocket, aBuffer, HEADER_SIZE, 0) < 0) {
+                        printf("Error writing to WiPacket socket while sending ACK\n");
+                        exit(1);
+                    }
+                    done = true;
                 }
             }
         }
-
-
     }
+
+    fclose(fd);
 
     return 0;
 }

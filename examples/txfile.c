@@ -60,9 +60,6 @@ int main(int argc, char **argv) {
         file_name = argv[argc-1];
     }
 
-    printf("File %s\n",file_name);
-    printf("Socket %s\n",socket_path);
-
     fd = fopen(file_name, "r");
     if (fd == NULL) {
         printf("Could not input file\n");
@@ -87,7 +84,8 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    printf("Connected to WiPacket\n");
+    if (verbose) printf("Connected to WiPacket\n");
+    printf("Sending file...\n");
 
     fd_set wiSocketSet;
     struct timeval timeout;
@@ -108,7 +106,7 @@ int main(int argc, char **argv) {
                 printf("Error writing to WiPacket socket\n");
                 exit(1);
             }
-            printf("Sent fragment %lu\n", fragment);
+            if (verbose) printf("Sent fragment %lu\n", fragment);
 
             FD_ZERO(&wiSocketSet);
             FD_SET(wiSocket, &wiSocketSet);
@@ -124,19 +122,18 @@ int main(int argc, char **argv) {
             if (socketReady == 1) {
                 sRead = recv(wiSocket, sBuffer, PACKET_SIZE, 0);
                 if (sRead != 0) {
-                    printf("Read %d bytes\n", sRead);
                     memcpy(&ack, sBuffer, HEADER_SIZE);
 
                     if (ack == fragment) {
                         gotAck = true;
                     } else {
-                        printf("Got a response, but not correct ACK\n");
+                        if (verbose) printf("Got a response, but not correct ACK\n");
                     }
                 }
             }
 
         }
-        printf("Got ACK for fragment %lu, moving on...\n", fragment);
+        if (verbose) printf("Got ACK for fragment %lu, moving on...\n", fragment);
     }
 
     // File transmitted, send EOF packet
@@ -150,7 +147,7 @@ int main(int argc, char **argv) {
             printf("Error writing to WiPacket socket\n");
             exit(1);
         }
-        printf("Sent EOF packet\n");
+        if (verbose) printf("Sent EOF packet\n");
 
         FD_ZERO(&wiSocketSet);
         FD_SET(wiSocket, &wiSocketSet);
@@ -166,13 +163,12 @@ int main(int argc, char **argv) {
         if (socketReady == 1) {
             sRead = recv(wiSocket, sBuffer, PACKET_SIZE, 0);
             if (sRead != 0) {
-                printf("Read %d bytes\n", sRead);
                 memcpy(&ack, sBuffer, HEADER_SIZE);
 
                 if (ack == fragment) {
                     gotAck = true;
                 } else {
-                    printf("Got a response, but not correct ACK\n");
+                    if (verbose) printf("Got a response, but not correct ACK\n");
                 }
             }
         }
