@@ -16,14 +16,14 @@ bool verbose = false;
 int wiSocket;
 FILE *fd;
 
-#define TIMEOUT_MSEC 1000
-#define HEADER_SIZE 4 // Size of unsigned long
+#define TIMEOUT_MSEC 25
+#define HEADER_SIZE 4
 #define FRAGMENT_SIZE 1482
 #define PACKET_SIZE HEADER_SIZE+FRAGMENT_SIZE
 char fBuffer[PACKET_SIZE];
 char sBuffer[PACKET_SIZE];
-unsigned long fragment;
-unsigned long ack;
+int fragment;
+int ack;
 
 int main(int argc, char **argv) {
     extern char *optarg;
@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
                 printf("Error writing to WiPacket socket\n");
                 exit(1);
             }
-            if (verbose) printf("Sent fragment %lu\n", fragment);
+            if (verbose) printf("Sent fragment %d\n", fragment);
 
             FD_ZERO(&wiSocketSet);
             FD_SET(wiSocket, &wiSocketSet);
@@ -132,7 +132,7 @@ int main(int argc, char **argv) {
             }
 
         }
-        if (verbose) printf("Got ACK for fragment %lu, moving on...\n", fragment);
+        if (verbose) printf("Got ACK for fragment %d, moving on...\n", fragment);
     }
 
     // File transmitted, send EOF packet
