@@ -20,7 +20,8 @@ FILE *fd;
 #define HEADER_SIZE 4 // Size of unsigned long
 #define FRAGMENT_SIZE 1482
 #define PACKET_SIZE HEADER_SIZE+FRAGMENT_SIZE
-char buffer[PACKET_SIZE];
+char fBuffer[PACKET_SIZE];
+char sBuffer[PACKET_SIZE];
 unsigned long fragment;
 unsigned long ack;
 
@@ -93,15 +94,16 @@ int main(int argc, char **argv) {
 
     fragment = 0;
     ack = 0;
-    int nRead;
-    while ((nRead = fread(buffer+HEADER_SIZE, 1, FRAGMENT_SIZE, fd))) {
+    int fRead;
+    int sRead;
+    while ((fRead = fread(fBuffer+HEADER_SIZE, 1, FRAGMENT_SIZE, fd))) {
         fragment++;
-        memcpy(buffer, &fragment, HEADER_SIZE);
+        memcpy(fBuffer, &fragment, HEADER_SIZE);
 
         bool gotAck = false;
         while (!gotAck) {
 
-            if (send(wiSocket, buffer, nRead, 0) < 0) {
+            if (send(wiSocket, fBuffer, fRead, 0) < 0) {
                 printf("Error writing to WiPacket socket\n");
                 exit(1);
             }
@@ -119,10 +121,10 @@ int main(int argc, char **argv) {
             }
 
             if (socketReady == 1) {
-                nRead = recv(wiSocket, buffer, PACKET_SIZE, 0);
-                if (nRead != 0) {
-                    printf("Read %d bytes\n", nRead);
-                    memcpy(&ack, buffer, HEADER_SIZE);
+                sRead = recv(wiSocket, sBuffer, PACKET_SIZE, 0);
+                if (sRead != 0) {
+                    printf("Read %d bytes\n", sRead);
+                    memcpy(&ack, sBuffer, HEADER_SIZE);
 
                     if (ack == fragment) {
                         gotAck = true;
