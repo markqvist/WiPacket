@@ -145,6 +145,10 @@ int main(int argc, char **argv) {
         }
     }
 
+    if (!done) {
+        printf("Transfer failed due to timeout\n");
+    }
+
     fclose(fd);
 
     return 0;
