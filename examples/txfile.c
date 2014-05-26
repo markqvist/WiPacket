@@ -138,6 +138,7 @@ int main(int argc, char **argv) {
                 exit(1);
             }
         }
+        retries = 0;
         if (verbose) printf("Got ACK for fragment %d, moving on...\n", fragment);
     }
 

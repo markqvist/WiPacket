@@ -10,6 +10,7 @@
 #include <sys/time.h>
 
 char *file_name;
+char *final_name;
 char *socket_path;
 bool verbose = false;
 
@@ -25,6 +26,8 @@ char sBuffer[PACKET_SIZE];
 char aBuffer[HEADER_SIZE];
 unsigned long fragment;
 unsigned long ack;
+
+void fail();
 
 int main(int argc, char **argv) {
     extern char *optarg;
@@ -58,7 +61,12 @@ int main(int argc, char **argv) {
         exit(1);
     } else {
         socket_path = argv[argc-2];
-        file_name = argv[argc-1];
+        final_name = argv[argc-1];
+        size_t size = strlen(final_name)+10;
+        char tmp[size];
+        snprintf(tmp, sizeof(tmp), "%s.transfer", final_name);
+        file_name = malloc(size);
+        memcpy(file_name, tmp, size);
     }
 
     fd = fopen(file_name, "w+");
@@ -71,7 +79,7 @@ int main(int argc, char **argv) {
     wiSocket = socket(AF_UNIX, SOCK_STREAM, 0);
     if (wiSocket == -1) {
         printf("Could not create socket\n");
-        exit(1);
+        fail();
     }
 
     remote.sun_family = AF_UNIX;
@@ -80,7 +88,7 @@ int main(int argc, char **argv) {
     if (connect(wiSocket, (struct sockaddr*)&remote, len) == -1) {
         perror("connect");
         printf("Could not connect to WiPacket socket\n");
-        exit(1);
+        fail();
     }
 
     if (verbose) printf("Connected to WiPacket\n");
@@ -105,7 +113,7 @@ int main(int argc, char **argv) {
         int socketReady = select(wiSocket+1, &wiSocketSet, NULL, NULL, &timeout);
         if (socketReady < 0) {
             printf("Error reading from WiPacket while waiting for data\n");
-            exit(1);
+            fail();
         }
 
         if (socketReady == 1) {
@@ -119,7 +127,7 @@ int main(int argc, char **argv) {
                     retries = 0;
                     if ((fwrite(sBuffer+HEADER_SIZE, 1, sRead - HEADER_SIZE, fd)) != sRead - HEADER_SIZE) {
                         printf("Error while writing received data to file\n");
-                        exit(1);
+                        fail();
                     }
                 }
 
@@ -127,7 +135,7 @@ int main(int argc, char **argv) {
                     memcpy(aBuffer, &ack, HEADER_SIZE);
                     if (send(wiSocket, aBuffer, HEADER_SIZE, 0) < 0) {
                         printf("Error writing to WiPacket socket while sending ACK\n");
-                        exit(1);
+                        fail();
                     }
                 }
 
@@ -137,7 +145,7 @@ int main(int argc, char **argv) {
                     memcpy(aBuffer, &ack, HEADER_SIZE);
                     if (send(wiSocket, aBuffer, HEADER_SIZE, 0) < 0) {
                         printf("Error writing to WiPacket socket while sending ACK\n");
-                        exit(1);
+                        fail();
                     }
                     done = true;
                 }
@@ -151,5 +159,15 @@ int main(int argc, char **argv) {
 
     fclose(fd);
 
+    unlink(final_name);
+    rename(file_name, final_name);
+
+
     return 0;
+}
+
+void fail() {
+    fclose(fd);
+    unlink(file_name);
+    exit(1);
 }
