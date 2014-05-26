@@ -75,7 +75,6 @@ int main(int argc, char **argv) {
 
     remote.sun_family = AF_UNIX;
     strcpy(remote.sun_path, socket_path);
-    printf("Opening socket at %s\n", remote.sun_path);
     int len = strlen(remote.sun_path) + sizeof(remote.sun_family);
     if (connect(wiSocket, (struct sockaddr*)&remote, len) == -1) {
         perror("connect");
