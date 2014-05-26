@@ -16,7 +16,7 @@ bool verbose = false;
 int wiSocket;
 FILE *fd;
 
-#define RETRIES 10
+#define RETRIES 100
 #define TIMEOUT_MSEC 25
 #define HEADER_SIZE 4
 #define FRAGMENT_SIZE 1482
