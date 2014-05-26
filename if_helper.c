@@ -29,7 +29,7 @@ int if_mtu(char *name, int mtu) {
     snprintf(buf, sizeof(buf), "ifconfig %s mtu %d", name, mtu);
     int ret = system(buf);
     if (ret != 0) {
-        printf("Could set MTU for interface %s\n", name);
+        printf("Could not set MTU for interface %s\n", name);
     }
     return ret;
 }
