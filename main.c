@@ -260,7 +260,7 @@ void init() {
     struct ifreq interfaceRequest;
     size_t max_if_name_len = sizeof(interfaceRequest.ifr_name);
     if (if_name_len > max_if_name_len) {
-        printf("Interface name is too long (max length is %lu)\n", max_if_name_len);
+        printf("Interface name is too long\n");
         exit(1);
     }
 
