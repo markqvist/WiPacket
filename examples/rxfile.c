@@ -16,7 +16,7 @@ bool verbose = false;
 int wiSocket;
 FILE *fd;
 
-#define TIMEOUT_MSEC 2
+#define TIMEOUT_MSEC 25
 #define HEADER_SIZE 4 // Size of unsigned long
 #define FRAGMENT_SIZE 1482
 #define PACKET_SIZE HEADER_SIZE+FRAGMENT_SIZE
