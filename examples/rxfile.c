@@ -17,7 +17,7 @@ int wiSocket;
 FILE *fd;
 
 #define TIMEOUT_MSEC 25
-#define HEADER_SIZE 4 // Size of unsigned long
+#define HEADER_SIZE 4
 #define FRAGMENT_SIZE 1482
 #define PACKET_SIZE HEADER_SIZE+FRAGMENT_SIZE
 char sBuffer[PACKET_SIZE];
@@ -111,7 +111,7 @@ int main(int argc, char **argv) {
                 memcpy(&fragment, sBuffer, HEADER_SIZE);
 
                 if (fragment == ack+1) {
-                    if (verbose) printf("Got fragment %lu (%d bytes)\n", fragment, sRead);
+                    if (verbose) printf("Got fragment %lu (%d bytes)\n", fragment, sRead-HEADER_SIZE);
                     ack++;
                     if ((fwrite(sBuffer+HEADER_SIZE, 1, sRead - HEADER_SIZE, fd)) != sRead - HEADER_SIZE) {
                         printf("Error while writing received data to file\n");

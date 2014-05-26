@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
         gotAck = false;
         while (!gotAck) {
 
-            if (send(wiSocket, fBuffer, fRead, 0) < 0) {
+            if (send(wiSocket, fBuffer, fRead+HEADER_SIZE, 0) < 0) {
                 printf("Error writing to WiPacket socket\n");
                 exit(1);
             }
