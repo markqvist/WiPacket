@@ -374,7 +374,7 @@ void prepeareBroadcastHeader() {
 }
 
 void configureInterface() {
-    printf("Configuring %s (%.2x:%.2x:%.2x:%.2x:%.2x:%.2x) for ibss\n" , if_name, hw_addr[0], hw_addr[1], hw_addr[2], hw_addr[3], hw_addr[4], hw_addr[5], if_index);
+    printf("Configuring %s (%.2x:%.2x:%.2x:%.2x:%.2x:%.2x) for ibss essid: \"\"\n" , if_name, hw_addr[0], hw_addr[1], hw_addr[2], hw_addr[3], hw_addr[4], hw_addr[5], essid);
     if_down(if_name);
     if_enable_ibss(if_name);
     if_up(if_name);
