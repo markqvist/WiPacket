@@ -78,7 +78,8 @@ int main(int argc, char **argv) {
     int eflag = 0;
     int fflag = 0;
     int sflag = 0;
-    int o, err = 0;
+    int rflag = 0; // set if program is in rx
+    int o, err, invo = 0;
     while ((o = getopt(argc, argv, "e:f:s:v::q::")) != -1) {
         switch (o) {
             case 'e':
@@ -101,8 +102,16 @@ int main(int argc, char **argv) {
                 quiet = true;
                 verbose = false;
                 break;
-
+            case 'r':
+                if (tflag) err = 2;
+                rflag = 1;
+                break;
+            case 't':
+                if (rflag) err = 2;
+                tflag = 1;
+                break;
             case '?':
+                invo = o;
                 err = 1;
                 break;
         }
@@ -112,15 +121,20 @@ int main(int argc, char **argv) {
         if ((optind+1) > argc) {
             printf("No interface specified\n");
         }
-        if (err) {
+        switch (err) {
+            case 1:
+                printf("Invalid option '-%c'\n", invo);
+            case 2:
+                printf("Impossible to set program both send [-t] and receive [-r]\n");
             //printf("Invalid option specified\n");
         }
-        printf("Usage: wipacket [-e essid] [-f frequency] [-s socket_path] [-v] [-q] interface\n");
+        printf("Usage: wipacket [-e essid] [-f frequency] [-s socket_path] [-t|r] [-v] [-q] interface\n");
         exit(1);
     } else {
         if_name = argv[optind];
         if_name_len = strlen(if_name);
     }
+
 
     if (!eflag) essid = ESSID;
     if (!fflag) frequency = FREQUENCY;
@@ -276,7 +290,7 @@ void init() {
     interfaceInfo(netSocket, requestPointer);
     
     //printf("Configuring %s (interface index %d)\n", if_name, if_index);
-    if (!quiet) printf("Configuring %s (%.2x:%.2x:%.2x:%.2x:%.2x:%.2x if_index=%d)\n" , if_name, hw_addr[0], hw_addr[1], hw_addr[2], hw_addr[3], hw_addr[4], hw_addr[5], if_index);
+    if (!quiet) printf("Loading %s (%.2x:%.2x:%.2x:%.2x:%.2x:%.2x if_index=%d)\n" , if_name, hw_addr[0], hw_addr[1], hw_addr[2], hw_addr[3], hw_addr[4], hw_addr[5], if_index);
 
     prepeareBroadcastHeader();
 }
@@ -358,6 +372,7 @@ void prepeareBroadcastHeader() {
 }
 
 void configureInterface() {
+    printf("Configuring %s (%.2x:%.2x:%.2x:%.2x:%.2x:%.2x) for ibss\n" , if_name, hw_addr[0], hw_addr[1], hw_addr[2], hw_addr[3], hw_addr[4], hw_addr[5], if_index);
     if_down(if_name);
     if_enable_ibss(if_name);
     if_up(if_name);
