@@ -78,7 +78,9 @@ int main(int argc, char **argv) {
     int eflag = 0;
     int fflag = 0;
     int sflag = 0;
-    int rflag = 0; // set if program is in rx
+    int rflag = 0; // set if program is in telegraph rx
+    int tflag = 0; // set if program is in telegraph tx
+
     int o, err, invo = 0;
     while ((o = getopt(argc, argv, "e:f:s:v::q::")) != -1) {
         switch (o) {
