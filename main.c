@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
     int tflag = 0; // set if program is in telegraph tx
 
     int o, err, invo = 0;
-    while ((o = getopt(argc, argv, "e:f:s:v::q::")) != -1) {
+    while ((o = getopt(argc, argv, "e:f:s:v::q:t:r:")) != -1) {
         switch (o) {
             case 'e':
                 eflag = 1;
@@ -125,10 +125,13 @@ int main(int argc, char **argv) {
         }
         switch (err) {
             case 1:
-                printf("Invalid option '-%c'\n", invo);
+                //printf("Invalid option specified\n");
+                break;
             case 2:
                 printf("Impossible to set program both send [-t] and receive [-r]\n");
-            //printf("Invalid option specified\n");
+                break;
+            default:
+                break;
         }
         printf("Usage: wipacket [-e essid] [-f frequency] [-s socket_path] [-t|r] [-v] [-q] interface\n");
         exit(1);
