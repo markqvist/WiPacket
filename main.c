@@ -113,7 +113,6 @@ int main(int argc, char **argv) {
                 tflag = 1;
                 break;
             case '?':
-                invo = o;
                 err = 1;
                 break;
         }
