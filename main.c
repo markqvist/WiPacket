@@ -81,8 +81,8 @@ int main(int argc, char **argv) {
     int rflag = 0; // set if program is in telegraph rx
     int tflag = 0; // set if program is in telegraph tx
 
-    int o, err, invo = 0;
-    while ((o = getopt(argc, argv, "e:f:s:v::q:t:r:")) != -1) {
+    int o, err = 0;
+    while ((o = getopt(argc, argv, "e:f:s:v::q::t::r::")) != -1) {
         switch (o) {
             case 'e':
                 eflag = 1;
