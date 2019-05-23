@@ -33,6 +33,7 @@ bool notMine(char *buffer);
 void attachExample();
 void teleSend();
 void teleRecv();
+void btos (void* bytes, size_t len, char* ostring, char* separator, unsigned chunks, unsigned columns);
 
 // Domain socket path & descriptor
 #define SOCKET_PATH "./wipacket.sock"
@@ -203,8 +204,26 @@ void teleSend() {
 }
 
 void teleRecv() {
-    printf("teleRecv() not implemented\n");
-    return;
+    while (run) {
+        char pktstr[(PAYLOAD_LENGTH + 14) * 3];  // for byte printing in format XX:XX:XX:...
+        char srcstr[ETH_ALEN * 3];
+        char dststr[ETH_ALEN * 3];
+        char packetBuffer[PAYLOAD_LENGTH];
+        struct sockaddr saddr;
+        int saddr_size = sizeof(saddr);
+        int nReadLength;
+
+        nReadLength = recvfrom(netSocket, packetBuffer, PAYLOAD_LENGTH + 14, 0, &saddr, (socklen_t * ) & saddr_size);
+        if (nReadLength > 0) {
+            if (protocolIdMatch(packetBuffer) && notMine(packetBuffer)) {
+                btos(packetBuffer, ETH_ALEN, srcstr, ":", 1, -1);
+                btos(packetBuffer+6, ETH_ALEN, dststr, ":", 1, -1);
+                btos(packetBuffer, nReadLength, pktstr, " ", 2, 4);
+                printf("%s > %s: %s \n%s\n...(end)\n", dststr, srcstr, packetBuffer + 14, pktstr);
+            }
+        }
+
+    }
 }
 
 void attachExample() {
@@ -449,5 +468,28 @@ void sigHandler(int s) {
     if (s==2) {
         if (!quiet) printf("\nCaught SIGINT, exiting...\n");
         run = false;
+    }
+}
+
+// byte array to string representation format XX:XX:XX:....
+void btos (void* bytes, size_t len, char* ostring, char* separator, unsigned chunks, unsigned columns) {
+    char* b = (char*)bytes;
+    if (!separator) separator="";
+    unsigned c=0;
+    for (size_t i = 0; i < len; i++) {
+        if (i && (!(i%chunks))) {
+            if (c++ < columns -1) {
+                if (separator) {
+                    sprintf(ostring, "%s", separator);
+                    ostring+=strlen(separator);
+                }
+            } else {
+                sprintf(ostring, "\n");
+                c=0;
+                ostring++;
+            }
+        }
+        sprintf(ostring, "%02X", b[i]);
+        ostring+=2;
     }
 }
