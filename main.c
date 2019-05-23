@@ -22,7 +22,7 @@
 // Forward declarations
 void init();
 void registerSockets();
-void configureInterface();
+void configureInterface(int oflag);
 void interfaceInfo(int sd, struct ifreq *req);
 void prepeareBroadcastHeader();
 bool transmit(char *payload, size_t len);
@@ -30,6 +30,9 @@ void cleanup();
 void sigHandler(int s);
 bool protocolIdMatch(char *buffer);
 bool notMine(char *buffer);
+void attachExample();
+void teleSend();
+void teleRecv();
 
 // Domain socket path & descriptor
 #define SOCKET_PATH "./wipacket.sock"
@@ -41,12 +44,15 @@ int domainSocket;
 
 // Max payload length
 #define PAYLOAD_LENGTH 1486
+#define MAXLINE 10
 
 // ESSID and frequency for network
 #define ESSID "WiPacket"
 #define FREQUENCY 2412
+#define BW _10MHZ
 static char *essid;
 static int frequency;
+static ocbbw_t bw;
 
 // The ethernet broadcast address
 const unsigned char broadcast_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
@@ -80,9 +86,11 @@ int main(int argc, char **argv) {
     int sflag = 0;
     int rflag = 0; // set if program is in telegraph rx
     int tflag = 0; // set if program is in telegraph tx
+    int oflag = 0; // use ocb instead of ibss
+    int bflag = 0;
 
     int o, err = 0;
-    while ((o = getopt(argc, argv, "e:f:s:v::q::t::r::")) != -1) {
+    while ((o = getopt(argc, argv, "e:f:b:s:v::q::t::r::o::")) != -1) {
         switch (o) {
             case 'e':
                 eflag = 1;
@@ -111,6 +119,13 @@ int main(int argc, char **argv) {
             case 't':
                 if (rflag) err = 2;
                 tflag = 1;
+                break;
+            case 'o':
+                oflag = 1;
+                break;
+            case 'b':
+                bflag = 1;
+                bw = (ocbbw_t)optarg;
                 break;
             case '?':
                 err = 1;
@@ -143,17 +158,60 @@ int main(int argc, char **argv) {
     if (!eflag) essid = ESSID;
     if (!fflag) frequency = FREQUENCY;
     if (!sflag) socketPath = SOCKET_PATH;
-   
+    if (!bflag) bw = BW;
+
     init();
-    configureInterface();
-    registerSockets();
+    configureInterface(oflag);
 
     if (!quiet) printf("Interface is ready!\n");
 
+    if (tflag) {
+        printf("Entering Telegraph sender mode...\n");
+        teleSend();
+    }
+    else if (rflag) {
+        printf("Entering Telegraph receiver mode...\n");
+        teleRecv();
+    }
+    else {
+        printf("Entering example mode...\n");
+        registerSockets();
+        attachExample();
+    }
+
+    cleanup();
+    exit(0);
+}
+
+void teleSend() {
+    char line[MAXLINE];
+    int linelen;
+    while (run) {
+        printf("> ");
+        linelen = 0;
+        do {
+            fflush(stdin);
+            line[linelen] = getc(stdin);
+        } while (run && line[linelen++]!='\n' && linelen<MAXLINE);
+        // printf("Read %d chars: %s", linelen, line);
+        if (!transmit(line, linelen)) {
+            printf("error: sending failed\n");
+        }
+
+    }
+
+}
+
+void teleRecv() {
+    printf("teleRecv() not implemented\n");
+    return;
+}
+
+void attachExample() {
     // Socket select setup
     struct timeval timeout;
     int timeout_msec = 5;
-    
+
     //////////////////////
 
     char incomingBuffer[PAYLOAD_LENGTH];
@@ -236,9 +294,6 @@ int main(int argc, char **argv) {
         }
 
     }
-
-    cleanup();
-    exit(0);
 }
 
 bool protocolIdMatch(char *buffer) {
@@ -310,8 +365,6 @@ void registerSockets() {
         exit(1);
     }
 
-
-
     local.sun_family = AF_UNIX;
     strcpy(local.sun_path, socketPath);
     unlink(local.sun_path);
@@ -340,9 +393,9 @@ bool transmit(char *payload, size_t len) {
     memcpy(buffer+ETHER_ADDR_LEN*2, &broadcast.sll_protocol, 2);
 
     int result = sendto(netSocket, buffer, frameLen, 0, (struct sockaddr*)&broadcast, sizeof(broadcast));
-
+    if (!quiet) printf("sent %d bytes\n", result);
     free(buffer);
-    
+
     if (result == -1) {
         return false;
     } else {
@@ -375,19 +428,20 @@ void prepeareBroadcastHeader() {
     memcpy(broadcast.sll_addr, broadcast_addr, ETHER_ADDR_LEN);
 }
 
-void configureInterface() {
-    printf("Configuring %s (%.2x:%.2x:%.2x:%.2x:%.2x:%.2x) for ibss essid: \"%s\"\n" , if_name, hw_addr[0], hw_addr[1], hw_addr[2], hw_addr[3], hw_addr[4], hw_addr[5], essid);
+void configureInterface(int oflag) {
+    printf("Configuring %s (%.2x:%.2x:%.2x:%.2x:%.2x:%.2x) in ", if_name, hw_addr[0], hw_addr[1], hw_addr[2], hw_addr[3], hw_addr[4], hw_addr[5]);
+    oflag?printf("OCB mode\n"):printf("IBSS mode, essid: \"%s\"", essid);
     if_down(if_name);
-    if_enable_ibss(if_name);
+    oflag?if_enable_ocb(if_name):if_enable_ibss(if_name);
     if_up(if_name);
     if_mtu(if_name, PAYLOAD_LENGTH+14);
-    if_join_ibss(if_name, essid, frequency);
+    oflag?if_join_ocb(if_name, frequency, bw):if_join_ibss(if_name, essid, frequency);
     if_promisc(if_name);
 }
 
 void cleanup() {
-    close(netSocket);
-    close(domainSocket);
+    if (netSocket) close(netSocket);
+    if (netSocket) close(domainSocket);
     unlink(socketPath);
 }
 
