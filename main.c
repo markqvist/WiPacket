@@ -22,7 +22,7 @@
 // Forward declarations
 void init();
 void registerSockets();
-void configureInterface();
+void configureInterface(int oflag);
 void interfaceInfo(int sd, struct ifreq *req);
 void prepeareBroadcastHeader();
 bool transmit(char *payload, size_t len);
@@ -30,6 +30,10 @@ void cleanup();
 void sigHandler(int s);
 bool protocolIdMatch(char *buffer);
 bool notMine(char *buffer);
+void attachExample();
+void teleSend();
+void teleRecv();
+void btos (void* bytes, size_t len, char* ostring, char* separator, unsigned chunks, unsigned columns);
 
 // Domain socket path & descriptor
 #define SOCKET_PATH "./wipacket.sock"
@@ -41,12 +45,15 @@ int domainSocket;
 
 // Max payload length
 #define PAYLOAD_LENGTH 1486
+#define MAXLINE 10
 
 // ESSID and frequency for network
 #define ESSID "WiPacket"
 #define FREQUENCY 2412
+#define BW _10MHZ
 static char *essid;
 static int frequency;
+static ocbbw_t bw;
 
 // The ethernet broadcast address
 const unsigned char broadcast_addr[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
@@ -78,8 +85,13 @@ int main(int argc, char **argv) {
     int eflag = 0;
     int fflag = 0;
     int sflag = 0;
+    int rflag = 0; // set if program is in telegraph rx
+    int tflag = 0; // set if program is in telegraph tx
+    int oflag = 0; // use ocb instead of ibss
+    int bflag = 0;
+
     int o, err = 0;
-    while ((o = getopt(argc, argv, "e:f:s:v::q::")) != -1) {
+    while ((o = getopt(argc, argv, "e:f:b:s:v::q::t::r::o::")) != -1) {
         switch (o) {
             case 'e':
                 eflag = 1;
@@ -101,7 +113,21 @@ int main(int argc, char **argv) {
                 quiet = true;
                 verbose = false;
                 break;
-
+            case 'r':
+                if (tflag) err = 2;
+                rflag = 1;
+                break;
+            case 't':
+                if (rflag) err = 2;
+                tflag = 1;
+                break;
+            case 'o':
+                oflag = 1;
+                break;
+            case 'b':
+                bflag = 1;
+                bw = (ocbbw_t)optarg;
+                break;
             case '?':
                 err = 1;
                 break;
@@ -112,30 +138,99 @@ int main(int argc, char **argv) {
         if ((optind+1) > argc) {
             printf("No interface specified\n");
         }
-        if (err) {
-            //printf("Invalid option specified\n");
+        switch (err) {
+            case 1:
+                //printf("Invalid option specified\n");
+                break;
+            case 2:
+                printf("Impossible to set program both send [-t] and receive [-r]\n");
+                break;
+            default:
+                break;
         }
-        printf("Usage: wipacket [-e essid] [-f frequency] [-s socket_path] [-v] [-q] interface\n");
+        printf("Usage: wipacket [-e essid] [-f frequency] [-s socket_path] [-t|r] [-v] [-q] interface\n");
         exit(1);
     } else {
         if_name = argv[optind];
         if_name_len = strlen(if_name);
     }
 
+
     if (!eflag) essid = ESSID;
     if (!fflag) frequency = FREQUENCY;
     if (!sflag) socketPath = SOCKET_PATH;
-   
+    if (!bflag) bw = BW;
+
     init();
-    configureInterface();
-    registerSockets();
+    configureInterface(oflag);
 
     if (!quiet) printf("Interface is ready!\n");
 
+    if (tflag) {
+        printf("Entering Telegraph sender mode...\n");
+        teleSend();
+    }
+    else if (rflag) {
+        printf("Entering Telegraph receiver mode...\n");
+        teleRecv();
+    }
+    else {
+        printf("Entering example mode...\n");
+        registerSockets();
+        attachExample();
+    }
+
+    cleanup();
+    exit(0);
+}
+
+void teleSend() {
+    char line[MAXLINE];
+    int linelen;
+    while (run) {
+        printf("> ");
+        linelen = 0;
+        do {
+            fflush(stdin);
+            line[linelen] = getc(stdin);
+        } while (run && line[linelen++]!='\n' && linelen<MAXLINE);
+        // printf("Read %d chars: %s", linelen, line);
+        if (!transmit(line, linelen)) {
+            printf("error: sending failed\n");
+        }
+
+    }
+
+}
+
+void teleRecv() {
+    while (run) {
+        char pktstr[(PAYLOAD_LENGTH + 14) * 3];  // for byte printing in format XX:XX:XX:...
+        char srcstr[ETH_ALEN * 3];
+        char dststr[ETH_ALEN * 3];
+        char packetBuffer[PAYLOAD_LENGTH];
+        struct sockaddr saddr;
+        int saddr_size = sizeof(saddr);
+        int nReadLength;
+
+        nReadLength = recvfrom(netSocket, packetBuffer, PAYLOAD_LENGTH + 14, 0, &saddr, (socklen_t * ) & saddr_size);
+        if (nReadLength > 0) {
+            if (protocolIdMatch(packetBuffer) && notMine(packetBuffer)) {
+                btos(packetBuffer, ETH_ALEN, srcstr, ":", 1, -1);
+                btos(packetBuffer+6, ETH_ALEN, dststr, ":", 1, -1);
+                btos(packetBuffer, nReadLength, pktstr, " ", 2, 4);
+                printf("%s > %s: %s \n%s\n...(end)\n", dststr, srcstr, packetBuffer + 14, pktstr);
+            }
+        }
+
+    }
+}
+
+void attachExample() {
     // Socket select setup
     struct timeval timeout;
     int timeout_msec = 5;
-    
+
     //////////////////////
 
     char incomingBuffer[PAYLOAD_LENGTH];
@@ -218,9 +313,6 @@ int main(int argc, char **argv) {
         }
 
     }
-
-    cleanup();
-    exit(0);
 }
 
 bool protocolIdMatch(char *buffer) {
@@ -276,7 +368,7 @@ void init() {
     interfaceInfo(netSocket, requestPointer);
     
     //printf("Configuring %s (interface index %d)\n", if_name, if_index);
-    if (!quiet) printf("Configuring %s (%.2x:%.2x:%.2x:%.2x:%.2x:%.2x if_index=%d)\n" , if_name, hw_addr[0], hw_addr[1], hw_addr[2], hw_addr[3], hw_addr[4], hw_addr[5], if_index);
+    if (!quiet) printf("Loading %s (%.2x:%.2x:%.2x:%.2x:%.2x:%.2x if_index=%d)\n" , if_name, hw_addr[0], hw_addr[1], hw_addr[2], hw_addr[3], hw_addr[4], hw_addr[5], if_index);
 
     prepeareBroadcastHeader();
 }
@@ -291,8 +383,6 @@ void registerSockets() {
         cleanup();
         exit(1);
     }
-
-
 
     local.sun_family = AF_UNIX;
     strcpy(local.sun_path, socketPath);
@@ -322,9 +412,9 @@ bool transmit(char *payload, size_t len) {
     memcpy(buffer+ETHER_ADDR_LEN*2, &broadcast.sll_protocol, 2);
 
     int result = sendto(netSocket, buffer, frameLen, 0, (struct sockaddr*)&broadcast, sizeof(broadcast));
-
+    if (!quiet) printf("sent %d bytes\n", result);
     free(buffer);
-    
+
     if (result == -1) {
         return false;
     } else {
@@ -357,18 +447,20 @@ void prepeareBroadcastHeader() {
     memcpy(broadcast.sll_addr, broadcast_addr, ETHER_ADDR_LEN);
 }
 
-void configureInterface() {
+void configureInterface(int oflag) {
+    printf("Configuring %s (%.2x:%.2x:%.2x:%.2x:%.2x:%.2x) in ", if_name, hw_addr[0], hw_addr[1], hw_addr[2], hw_addr[3], hw_addr[4], hw_addr[5]);
+    oflag?printf("OCB mode\n"):printf("IBSS mode, essid: \"%s\"", essid);
     if_down(if_name);
-    if_enable_ibss(if_name);
+    oflag?if_enable_ocb(if_name):if_enable_ibss(if_name);
     if_up(if_name);
     if_mtu(if_name, PAYLOAD_LENGTH+14);
-    if_join_ibss(if_name, essid, frequency);
+    oflag?if_join_ocb(if_name, frequency, bw):if_join_ibss(if_name, essid, frequency);
     if_promisc(if_name);
 }
 
 void cleanup() {
-    close(netSocket);
-    close(domainSocket);
+    if (netSocket) close(netSocket);
+    if (netSocket) close(domainSocket);
     unlink(socketPath);
 }
 
@@ -376,5 +468,28 @@ void sigHandler(int s) {
     if (s==2) {
         if (!quiet) printf("\nCaught SIGINT, exiting...\n");
         run = false;
+    }
+}
+
+// byte array to string representation format XX:XX:XX:....
+void btos (void* bytes, size_t len, char* ostring, char* separator, unsigned chunks, unsigned columns) {
+    char* b = (char*)bytes;
+    if (!separator) separator="";
+    unsigned c=0;
+    for (size_t i = 0; i < len; i++) {
+        if (i && (!(i%chunks))) {
+            if (c++ < columns -1) {
+                if (separator) {
+                    sprintf(ostring, "%s", separator);
+                    ostring+=strlen(separator);
+                }
+            } else {
+                sprintf(ostring, "\n");
+                c=0;
+                ostring++;
+            }
+        }
+        sprintf(ostring, "%02X", b[i]);
+        ostring+=2;
     }
 }

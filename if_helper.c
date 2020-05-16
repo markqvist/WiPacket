@@ -63,3 +63,23 @@ int if_promisc(char *name) {
     }
     return ret;
 }
+
+int if_enable_ocb(char *name) {
+    char buf[128];
+    snprintf(buf, sizeof(buf), "iw dev %s set type ocb", name);
+    int ret = system(buf);
+    if (ret != 0) {
+        printf("Could not enable OCB on %s\n", name);
+    }
+    return ret;
+}
+
+int if_join_ocb(char *name, int frequency, ocbbw_t bw) {
+    char buf[128];
+    snprintf(buf, sizeof(buf), "iw dev %s ocb join %d %s", name, frequency, bw?"10MHZ":"5MHZ");
+    int ret = system(buf);
+    if (ret != 0) {
+        printf("Interface %s failed setting ocb on frequency %d with bw %s\n", name, frequency, bw?"10MHZ":"5MHZ");
+    }
+    return ret;
+}
